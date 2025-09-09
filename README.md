@@ -84,6 +84,68 @@ O robô:
 - Se a confiança for >= `LIMITE_CONFIANCA`, grava a linha na aba `Previsões`.
 - Aguarda até o próximo slot para repetir.
 
+## Servidor (VPS Oracle Always Free)
+
+Para disponibilizar um painel com botões Iniciar/Pausar/Parar e expor o robô 24/7:
+
+1) Instalação
+
+```bash
+sudo apt update && sudo apt install -y python3-venv
+cd /caminho/para/RoboOpcoes
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -r requirements.txt
+```
+
+2) Credenciais e planilha
+
+- Coloque `credenciais.json` na raiz do projeto.
+- Compartilhe a planilha Google com o e-mail da Service Account.
+- Ajuste `SHEET_ID` em `robo_core.py` se necessário.
+
+3) Subir o servidor
+
+```bash
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+Abra no navegador: `http://SEU_IP:8000/`
+
+4) Executar em produção (opcional)
+
+Crie um serviço systemd para iniciar junto com a máquina:
+
+```ini
+[Unit]
+Description=Robo Hibrido API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/caminho/para/RoboOpcoes
+Environment="PATH=/caminho/para/RoboOpcoes/.venv/bin"
+ExecStart=/caminho/para/RoboOpcoes/.venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Depois:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable robohibrido
+sudo systemctl start robohibrido
+```
+
+5) Segurança
+
+- Restrinja a porta com firewall se necessário.
+- Não exponha `credenciais.json` publicamente.
+
 ## Como funciona a confiança
 - **Confiança do modelo**: `predict_proba` do RandomForest.
 - **Ajuste por lags**: reduz a confiança quando há poucos lags disponíveis no último registro.

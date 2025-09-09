@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Painel do Robô Híbrido</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif; margin: 24px; color: #1f2937; }
+      h1 { font-size: 22px; margin-bottom: 8px; }
+      .subtitle { color: #6b7280; margin-bottom: 20px; }
+      .row { display: flex; gap: 12px; margin-bottom: 18px; }
+      button { padding: 10px 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+      .start { background: #10b981; color: white; }
+      .pause { background: #f59e0b; color: white; }
+      .stop { background: #ef4444; color: white; }
+      .resume { background: #3b82f6; color: white; }
+      .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; max-width: 640px; }
+      .status { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; background: #f9fafb; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
+      a { color: #3b82f6; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <h1>Painel do Robô Híbrido</h1>
+    <div class="subtitle">Controle: iniciar, pausar, retomar e parar. Atualiza status a cada 3s.</div>
+
+    <div class="row">
+      <button class="start" id="btnStart">Iniciar</button>
+      <button class="pause" id="btnPause">Pausar</button>
+      <button class="resume" id="btnResume">Retomar</button>
+      <button class="stop" id="btnStop">Parar</button>
+    </div>
+
+    <div class="card">
+      <div><strong>Status</strong></div>
+      <div id="status" class="status">Carregando...</div>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById('status');
+
+      async function call(path, method = 'GET') {
+        const res = await fetch(path, { method });
+        return await res.json();
+      }
+
+      async function refresh() {
+        try {
+          const s = await call('/status');
+          statusEl.textContent = JSON.stringify(s, null, 2);
+        } catch (e) {
+          statusEl.textContent = 'Erro ao obter status: ' + e;
+        }
+      }
+
+      document.getElementById('btnStart').onclick = async () => { await call('/start', 'POST'); refresh(); };
+      document.getElementById('btnPause').onclick = async () => { await call('/pause', 'POST'); refresh(); };
+      document.getElementById('btnResume').onclick = async () => { await call('/resume', 'POST'); refresh(); };
+      document.getElementById('btnStop').onclick = async () => { await call('/stop', 'POST'); refresh(); };
+
+      refresh();
+      setInterval(refresh, 3000);
+    </script>
+  </body>
+  </html>
+
+

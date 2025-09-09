@@ -1,3 +1,15 @@
+.venv/
+__pycache__/
+.env
+credenciais.json
+*.pyc
+*.pyo
+*.log
+robo_log.txt
+log_robo.txt
+modelo_ml.pkl
+dados_velas.xlsx
+
 # Ambientes e cache
 .venv/
 venv/

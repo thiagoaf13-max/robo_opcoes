@@ -1,0 +1,10 @@
+[Unit]
+Description=Robo Hibrido API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=oem
+Group=oem
+WorkingDirectory=/home/oem/Área
