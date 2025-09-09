@@ -1,0 +1,16 @@
+# Ambientes e cache
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Credenciais e chaves
+credenciais.json
+robo-*.json
+
+# Artefatos e dados locais
+modelo_ml.pkl
+dados_velas.xlsx
+log_robo.txt
+robo_log.txt
