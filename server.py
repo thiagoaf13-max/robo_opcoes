@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import datetime
 import os
+import subprocess
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -122,6 +123,49 @@ def test_write():
         pid = f"API-{uuid4().hex[:8]}"
         registrar_previsao_google(aba_prev, pid, "TESTE", texto_prev, 0.99, horario_alvo)
         return JSONResponse({"ok": True, "mensagem": "Linha de teste gravada em Previsões.", "horario": horario_alvo})
+    except Exception as e:
+        return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)
+
+
+# Admin: atualizar código e reiniciar robôs (em processo)
+@app.post("/admin/update")
+def admin_update():
+    try:
+        base = Path(__file__).parent
+        # 1) git pull no diretório do projeto
+        proc = subprocess.run(["git", "pull"], cwd=str(base), capture_output=True, text=True)
+        git_out = proc.stdout + "\n" + proc.stderr
+
+        # 2) reiniciar robôs em processo (sem reiniciar o servidor)
+        global worker, worker_v2
+        was_running_v1 = worker.status().get("running", False)
+        was_running_v2 = worker_v2.status().get("running", False)
+
+        try:
+            worker.stop()
+        except Exception:
+            pass
+        try:
+            worker_v2.stop()
+        except Exception:
+            pass
+
+        # Cria novas instâncias para limpar estado
+        worker = RoboHibrido()
+        worker_v2 = RoboHibridoV2()
+
+        if was_running_v1:
+            worker.start()
+        if was_running_v2:
+            worker_v2.start()
+
+        return JSONResponse({
+            "ok": True,
+            "mensagem": "Atualização aplicada (git pull) e robôs reiniciados em processo.",
+            "git_output": git_out,
+            "v1_running": was_running_v1,
+            "v2_running": was_running_v2,
+        })
     except Exception as e:
         return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)
 

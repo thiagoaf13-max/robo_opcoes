@@ -32,6 +32,7 @@
       <button class="pause" id="btnPause">Pausar</button>
       <button class="resume" id="btnResume">Retomar</button>
       <button class="stop" id="btnStop">Parar</button>
+      <button class="resume" id="btnUpdate">Atualizar</button>
     </div>
 
     <div class="grid">
@@ -306,6 +307,16 @@
       document.getElementById('btnPause').onclick = async () => { await call('/pause', 'POST'); refresh(); };
       document.getElementById('btnResume').onclick = async () => { await call('/resume', 'POST'); refresh(); };
       document.getElementById('btnStop').onclick = async () => { await call('/stop', 'POST'); refresh(); };
+      document.getElementById('btnUpdate').onclick = async () => {
+        try {
+          const res = await call('/admin/update', 'POST');
+          alert('Atualizado! Robôs reiniciados.');
+        } catch (e) {
+          alert('Falha ao atualizar: ' + e);
+        }
+        refresh();
+        refreshV2();
+      };
 
       document.getElementById('btnStartV2').onclick = async () => { await call('/v2/start', 'POST'); refreshV2(); };
       document.getElementById('btnPauseV2').onclick = async () => { await call('/v2/pause', 'POST'); refreshV2(); };
