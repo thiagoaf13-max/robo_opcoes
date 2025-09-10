@@ -7,6 +7,7 @@
     <style>
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif; margin: 24px; color: #1f2937; }
       h1 { font-size: 22px; margin-bottom: 8px; }
+      h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
       .subtitle { color: #6b7280; margin-bottom: 20px; }
       .row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
       button { padding: 10px 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
@@ -14,16 +15,18 @@
       .pause { background: #f59e0b; color: white; }
       .stop { background: #ef4444; color: white; }
       .resume { background: #3b82f6; color: white; }
-      .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; max-width: 920px; }
-      .status { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; background: #f9fafb; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
+      .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; width: 100%; height: 240px; display: flex; flex-direction: column; box-sizing: border-box; }
+      .card > div:first-child { font-weight: 700; margin-bottom: 8px; }
+      .status { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; background: #f9fafb; padding: 12px; border-radius: 8px; white-space: pre-wrap; flex: 1; overflow: auto; }
       a { color: #3b82f6; text-decoration: none; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; align-items: stretch; }
     </style>
   </head>
   <body>
     <h1>Painel do Robô Híbrido</h1>
     <div class="subtitle">Controle do robô sem terminal. Status atualiza a cada 3s.</div>
 
+    <h2>Robô 1</h2>
     <div class="row">
       <button class="start" id="btnStart">Iniciar</button>
       <button class="pause" id="btnPause">Pausar</button>
@@ -37,21 +40,35 @@
         <div id="status" class="status">Carregando...</div>
       </div>
       <div class="card">
+        <div><strong>Última Previsão</strong></div>
+        <div id="lastPred" class="status">Sem dados ainda</div>
+      </div>
+      <div class="card">
         <div><strong>Histórico de Previsões (5 últimas)</strong></div>
         <div id="hist" class="status">Sem histórico</div>
       </div>
     </div>
 
-    <div class="card" style="margin-top: 12px;">
-      <div><strong>Última Previsão</strong></div>
-      <div id="lastPred" class="status">Sem dados ainda</div>
+    <h2>Robô 2 (V2)</h2>
+    <div class="row">
+      <button class="start" id="btnStartV2">Iniciar V2</button>
+      <button class="pause" id="btnPauseV2">Pausar V2</button>
+      <button class="resume" id="btnResumeV2">Retomar V2</button>
+      <button class="stop" id="btnStopV2">Parar V2</button>
     </div>
 
-    
+    <div class="grid">
+      <div class="card">
+        <div><strong>Status V2</strong></div>
+        <div id="statusV2" class="status">Carregando...</div>
+      </div>
+    </div>
+
 
     <script>
       const statusEl = document.getElementById('status');
       const lastPredEl = document.getElementById('lastPred');
+      const statusV2El = document.getElementById('statusV2');
 
       async function call(path, method = 'GET') {
         const res = await fetch(path, { method });
@@ -134,15 +151,48 @@
         }
       }
 
+      async function refreshV2() {
+        try {
+          const s = await call('/v2/status');
+          const up = s.ultima_previsao || {};
+          const estado = s.running ? (s.paused ? '⏸️ Pausado' : '▶️ Rodando') : '⏹️ Parado';
+          const alvo = s.ultimo_horario_alvo ? s.ultimo_horario_alvo : '-';
+          let label = '-';
+          if (up.label) {
+            const low = String(up.label).toLowerCase();
+            if (low.includes('acerto')) label = '✅ ACERTO'; else if (low.includes('erro')) label = '❌ ERRO'; else label = 'ℹ️ ' + up.label;
+          }
+          let confEmoji = '';
+          const cf = Number(up.confianca_final || 0);
+          if (cf >= 0.9) confEmoji = '🚨'; else if (cf >= 0.7) confEmoji = '🟢'; else if (cf > 0) confEmoji = '🟡';
+          const linhas = [
+            `${estado} | limiar: ${s.threshold ?? '-'}`,
+            `🕒 Próximo: ${alvo}`,
+            `📊 Sinal: ${label}`,
+            `🔮 Confiança: ${formatPercent(up.confianca_final)} ${confEmoji} | calib.: ${s.calibracao ?? '-'}`,
+          ];
+          statusV2El.textContent = linhas.join('\n');
+        } catch (e) {
+          statusV2El.textContent = 'Erro ao obter status V2: ' + e;
+        }
+      }
+
       document.getElementById('btnStart').onclick = async () => { await call('/start', 'POST'); refresh(); };
       document.getElementById('btnPause').onclick = async () => { await call('/pause', 'POST'); refresh(); };
       document.getElementById('btnResume').onclick = async () => { await call('/resume', 'POST'); refresh(); };
       document.getElementById('btnStop').onclick = async () => { await call('/stop', 'POST'); refresh(); };
 
+      document.getElementById('btnStartV2').onclick = async () => { await call('/v2/start', 'POST'); refreshV2(); };
+      document.getElementById('btnPauseV2').onclick = async () => { await call('/v2/pause', 'POST'); refreshV2(); };
+      document.getElementById('btnResumeV2').onclick = async () => { await call('/v2/resume', 'POST'); refreshV2(); };
+      document.getElementById('btnStopV2').onclick = async () => { await call('/v2/stop', 'POST'); refreshV2(); };
+
       
 
       refresh();
       setInterval(refresh, 3000);
+      refreshV2();
+      setInterval(refreshV2, 3000);
     </script>
   </body>
 </html>
