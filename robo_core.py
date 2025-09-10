@@ -383,7 +383,14 @@ class RoboHibrido:
 
                 prob_horario = calcular_probabilidade_horario(df)
 
+                # Usa lags da última linha, porém ajusta hora/minuto/dia_semana para o PRÓXIMO slot
                 ultimo = df[feature_cols].iloc[-1:].copy()
+                prox = proximo_slot_5min()
+                ultimo.loc[:, "hora"] = prox.hour
+                ultimo.loc[:, "minuto"] = prox.minute
+                # pandas .dt.dayofweek usa Monday=0, Python datetime.weekday() também
+                ultimo.loc[:, "dia_semana"] = prox.weekday()
+
                 lags_cols = [f"lag_{i}" for i in range(1, NUM_LAGS + 1)]
                 lags_disponiveis = int(ultimo[lags_cols].notna().sum(axis=1).iloc[0])
                 if lags_disponiveis == 0:
@@ -398,7 +405,6 @@ class RoboHibrido:
                 fator_conf_modelo = 0.5 + 0.5 * peso_lags
                 confianca_modelo_ajustada = confianca_modelo * fator_conf_modelo
 
-                prox = proximo_slot_5min()
                 slot_str = prox.strftime("%H:%M")
                 confianca_horario = prob_horario.get(slot_str, 0.5)
 
