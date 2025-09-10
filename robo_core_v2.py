@@ -30,6 +30,9 @@ from robo_core import (
 load_dotenv()
 
 # Parâmetros V2
+SHEET_ID_V2 = os.getenv("SHEET_ID_V2", os.getenv("SHEET_ID", "1iP4Im3GPL21i_xOIVawaca2DjzJU-O9yOjBoptn-m5Y"))
+SHEET_NAME_DADOS_V2 = os.getenv("SHEET_NAME_DADOS_V2", os.getenv("SHEET_NAME_DADOS", "Dados"))
+SHEET_NAME_PREVISOES_V2 = os.getenv("SHEET_NAME_PREVISOES_V2", os.getenv("SHEET_NAME_PREVISOES", "Previsões"))
 V2_WINDOW_ROWS = int(os.getenv("V2_WINDOW_ROWS", "0"))  # 0 = usar todo histórico
 V2_VAL_FRACTION = float(os.getenv("V2_VAL_FRACTION", "0.2"))
 V2_CALIBRACAO_TIPO = os.getenv("V2_CALIBRACAO_TIPO", os.getenv("CALIBRACAO_TIPO", "platt")).strip().lower()
@@ -138,7 +141,11 @@ class RoboHibridoV2:
         escrever_log("🤖 (V2) Robô híbrido V2 iniciado...")
 
         try:
-            aba_dados, aba_prev = conectar_google_sheets()
+            aba_dados, aba_prev = conectar_google_sheets(
+                sheet_id=SHEET_ID_V2,
+                sheet_name_dados=SHEET_NAME_DADOS_V2,
+                sheet_name_prev=SHEET_NAME_PREVISOES_V2,
+            )
         except Exception as e:
             escrever_log(f"❌ (V2) Erro ao conectar Google Sheets: {e}")
             with self._lock:

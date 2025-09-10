@@ -18,7 +18,7 @@ from sklearn.calibration import CalibratedClassifierCV
 # Carrega variáveis de ambiente do arquivo .env (se existir)
 load_dotenv()
 
-SHEET_ID = os.getenv("SHEET_ID", "1iP4Im3GPL21i_xOIVawaca2DjzJU-O9yOjBoptn-m5Y")
+SHEET_ID = os.getenv("SHEET_ID", "114XbIrVhnToZlgHWZd8v9_L9Tvp_UlIiSw9P-f0OzFo")
 SHEET_NAME_DADOS = os.getenv("SHEET_NAME_DADOS", "Dados")
 SHEET_NAME_PREVISOES = os.getenv("SHEET_NAME_PREVISOES", "Previsões")
 CREDENCIAIS_JSON = os.getenv("CREDENCIAIS_JSON", "credenciais.json")
@@ -45,16 +45,24 @@ def escrever_log(msg: str) -> None:
 # ==============================
 # CONEXÃO COM GOOGLE SHEETS
 # ==============================
-def conectar_google_sheets() -> Tuple[gspread.Worksheet, gspread.Worksheet]:
+def conectar_google_sheets(
+    sheet_id: Optional[str] = None,
+    sheet_name_dados: Optional[str] = None,
+    sheet_name_prev: Optional[str] = None,
+) -> Tuple[gspread.Worksheet, gspread.Worksheet]:
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
     creds = Credentials.from_service_account_file(CREDENCIAIS_JSON, scopes=scopes)
     client = gspread.authorize(creds)
-    sheet = client.open_by_key(SHEET_ID)
-    aba_dados = sheet.worksheet(SHEET_NAME_DADOS)
-    aba_prev = sheet.worksheet(SHEET_NAME_PREVISOES)
+    effective_sheet_id = sheet_id or SHEET_ID
+    effective_name_dados = sheet_name_dados or SHEET_NAME_DADOS
+    effective_name_prev = sheet_name_prev or SHEET_NAME_PREVISOES
+
+    sheet = client.open_by_key(effective_sheet_id)
+    aba_dados = sheet.worksheet(effective_name_dados)
+    aba_prev = sheet.worksheet(effective_name_prev)
     return aba_dados, aba_prev
 
 
