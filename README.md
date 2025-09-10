@@ -47,11 +47,40 @@ pip install pandas gspread google-auth scikit-learn
 ## Credenciais e Google Sheets
 1. Crie uma Service Account no Google Cloud e baixe o JSON (por exemplo `credenciais.json`).
 2. Compartilhe sua planilha com o e-mail da Service Account (permissão de editor).
-3. Ajuste no código, se necessário:
+3. Ajuste a configuração (via `.env` recomendado, ou no código se necessário):
    - `SHEET_ID`: ID da planilha (parte da URL entre `/d/` e `/edit`).
    - `SHEET_NAME_DADOS`: nome da aba de entrada (padrão `Dados`).
    - `SHEET_NAME_PREVISOES`: nome da aba de saída (padrão `Previsões`).
    - `CREDENCIAIS_JSON`: caminho do arquivo JSON de credenciais.
+
+### Configuração via `.env` (recomendado)
+Crie um arquivo `.env` na raiz do projeto com as variáveis abaixo. O código (em `robo_core.py`) carrega automaticamente estas variáveis.
+
+```bash
+# Identificação da planilha
+SHEET_ID=1iP4Im3GPL21i_xOIVawaca2DjzJU-O9yOjBoptn-m5Y
+SHEET_NAME_DADOS=Dados
+SHEET_NAME_PREVISOES=Previsões
+
+# Credenciais
+CREDENCIAIS_JSON=credenciais.json
+
+# Parâmetros do robô
+NUM_LAGS=12
+LIMITE_CONFIANCA=0.70
+ALERTA_CONFIANCA=0.90
+FREQ_MIN=5
+TAMANHO_TAXA_MOVEL=24
+
+# Treino e calibração (opcional)
+CALIBRACAO_TIPO=none   # none|platt|isotonic
+TREINO_CADA_CICLOS=1
+TREINO_SOMENTE_SE_DADOS_MUDARAM=true
+```
+
+Observações:
+- O arquivo `.env` já está no `.gitignore` e não será commitado.
+- Você pode sobrescrever qualquer variável via ambiente do sistema (ex.: no systemd).
 
 ### Estrutura esperada da aba `Dados`
 O robô é tolerante a variações de nomes, mas espera colunas equivalentes a:
@@ -62,7 +91,7 @@ O robô é tolerante a variações de nomes, mas espera colunas equivalentes a:
 A coluna `resultado` é inferida: 1 se houver `Horário Sucesso`, 0 se `Horário Falha`, senão `None`.
 
 ## Parâmetros principais
-Ajustáveis no topo de `Robo hibrido.py`:
+Ajustáveis via `.env` (ou variáveis de ambiente):
 - `NUM_LAGS = 12`: quantidade de lags de `resultado` usados como features.
 - `LIMITE_CONFIANCA = 0.70`: mínimo para registrar previsão na aba `Previsões`.
 - `ALERTA_CONFIANCA = 0.90`: marca visual de alerta quando a confiança for alta.
