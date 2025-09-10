@@ -62,6 +62,14 @@
         <div><strong>Status V2</strong></div>
         <div id="statusV2" class="status">Carregando...</div>
       </div>
+      <div class="card">
+        <div><strong>Última Previsão (V2)</strong></div>
+        <div id="lastPredV2" class="status">Sem dados ainda</div>
+      </div>
+      <div class="card">
+        <div><strong>Histórico de Previsões V2 (5 últimas)</strong></div>
+        <div id="histV2" class="status">Sem histórico</div>
+      </div>
     </div>
 
 
@@ -69,6 +77,7 @@
       const statusEl = document.getElementById('status');
       const lastPredEl = document.getElementById('lastPred');
       const statusV2El = document.getElementById('statusV2');
+      const lastPredV2El = document.getElementById('lastPredV2');
 
       async function call(path, method = 'GET') {
         const res = await fetch(path, { method });
@@ -104,6 +113,35 @@
           document.getElementById('hist').textContent = linhas.join('\n');
         } catch (e) {
           document.getElementById('hist').textContent = 'Erro ao renderizar histórico: ' + e;
+        }
+      }
+
+      function renderLastPredictionV2(s) {
+        try {
+          const up = s.ultima_previsao || {};
+          const cont = s.contadores || {};
+          const linhas = [
+            `Label: ${up.label ?? '-'}`,
+            `Conf. final: ${up.confianca_final ?? '-'} | modelo: ${up.confianca_modelo ?? '-'} | conf. horário: ${up.confianca_horario ?? '-'}`,
+            `Slot: ${up.slot ?? '-'}`,
+            `Texto: ${up.texto ?? '-'}`,
+            `Registradas: ${cont.registradas ?? 0} | Ignoradas: ${cont.ignoradas ?? 0}`,
+            `Taxa móvel: ${s.taxa_movel ?? '-'}`,
+          ];
+          lastPredV2El.textContent = linhas.join('\n');
+        } catch (e) {
+          lastPredV2El.textContent = 'Erro ao renderizar última previsão (V2): ' + e;
+        }
+      }
+
+      function renderHistoryV2(s) {
+        try {
+          const hist = s.historico_previsoes || [];
+          if (!hist.length) { document.getElementById('histV2').textContent = 'Sem histórico'; return; }
+          const linhas = hist.map(h => `${h.timestamp} | ${h.slot} | ${h.label} | conf: ${h.confianca_final}`);
+          document.getElementById('histV2').textContent = linhas.join('\n');
+        } catch (e) {
+          document.getElementById('histV2').textContent = 'Erro ao renderizar histórico (V2): ' + e;
         }
       }
 
@@ -172,6 +210,8 @@
             `🔮 Confiança: ${formatPercent(up.confianca_final)} ${confEmoji} | calib.: ${s.calibracao ?? '-'}`,
           ];
           statusV2El.textContent = linhas.join('\n');
+          renderLastPredictionV2(s);
+          renderHistoryV2(s);
         } catch (e) {
           statusV2El.textContent = 'Erro ao obter status V2: ' + e;
         }
