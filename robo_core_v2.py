@@ -381,22 +381,34 @@ class RoboHibridoV2:
                 # Atualiza placar comparando previsões pendentes com resultados da planilha
                 try:
                     if not df.empty and self._previsoes_pendentes:
-                        keys = df.dropna(subset=["datetime_horario", "resultado"]).copy()
-                        keys.loc[:, "_key"] = keys["datetime_horario"].dt.strftime("%Y-%m-%d %H:%M")
-                        key_to_result = {k: int(v) for k, v in zip(keys["_key"].tolist(), keys["resultado"].tolist())}
-                        ainda_pendentes: list[Dict[str, Any]] = []
-                        for p in self._previsoes_pendentes:
-                            res = key_to_result.get(p.get("alvo_key"))
-                            if res is None:
-                                ainda_pendentes.append(p)
-                            else:
-                                if int(p.get("pred_label", 0)) == int(res):
-                                    self._acertos_count += 1
-                                    atualizar_resultado_previsao(aba_prev, p.get("prediction_id", ""), "ACERTO")
+                        df_ok = df.dropna(subset=["datetime_horario", "resultado"]).copy()
+                        if not df_ok.empty:
+                            tol_sec = max(60, FREQ_MIN * 60)
+                            ainda_pendentes: list[Dict[str, Any]] = []
+                            for p in self._previsoes_pendentes:
+                                alvo_dt = p.get("alvo_dt")
+                                if alvo_dt is None:
+                                    ainda_pendentes.append(p)
+                                    continue
+                                deltas = (df_ok["datetime_horario"] - alvo_dt).abs()
+                                idx_min = deltas.idxmin()
+                                delta_min = deltas.loc[idx_min]
+                                if pd.notna(delta_min) and float(delta_min.total_seconds()) <= tol_sec:
+                                    res = int(df_ok.loc[idx_min, "resultado"]) if pd.notna(df_ok.loc[idx_min, "resultado"]) else None
+                                    if res is None:
+                                        ainda_pendentes.append(p)
+                                        continue
+                                    if int(p.get("pred_label", 0)) == res:
+                                        self._acertos_count += 1
+                                        atualizar_resultado_previsao(aba_prev, p.get("prediction_id", ""), "ACERTO")
+                                        escrever_log(f"✅ (V2) Placar: alvo {alvo_dt} casado com {df_ok.loc[idx_min, 'datetime_horario']} (Δ={int(delta_min.total_seconds())}s) => ACERTO")
+                                    else:
+                                        self._erros_count += 1
+                                        atualizar_resultado_previsao(aba_prev, p.get("prediction_id", ""), "ERRO")
+                                        escrever_log(f"❌ (V2) Placar: alvo {alvo_dt} casado com {df_ok.loc[idx_min, 'datetime_horario']} (Δ={int(delta_min.total_seconds())}s) => ERRO")
                                 else:
-                                    self._erros_count += 1
-                                    atualizar_resultado_previsao(aba_prev, p.get("prediction_id", ""), "ERRO")
-                        self._previsoes_pendentes = ainda_pendentes
+                                    ainda_pendentes.append(p)
+                            self._previsoes_pendentes = ainda_pendentes
                 except Exception:
                     pass
 
