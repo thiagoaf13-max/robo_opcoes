@@ -118,7 +118,9 @@ def test_write():
         _, aba_prev = conectar_google_sheets()
         texto_prev = "TESTE API - escrita de verificação"
         horario_alvo = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        registrar_previsao_google(aba_prev, texto_prev, 0.99, horario_alvo)
+        from uuid import uuid4
+        pid = f"API-{uuid4().hex[:8]}"
+        registrar_previsao_google(aba_prev, pid, "TESTE", texto_prev, 0.99, horario_alvo)
         return JSONResponse({"ok": True, "mensagem": "Linha de teste gravada em Previsões.", "horario": horario_alvo})
     except Exception as e:
         return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)

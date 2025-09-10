@@ -51,6 +51,10 @@
         <div><strong>Telemetria</strong></div>
         <div id="telemetry" class="status">Sem dados</div>
       </div>
+      <div class="card">
+        <div><strong>Placar</strong></div>
+        <div id="score" class="status">Sem dados</div>
+      </div>
     </div>
 
     <h2>Robô 2 (V2)</h2>
@@ -78,6 +82,10 @@
         <div><strong>Telemetria V2</strong></div>
         <div id="telemetryV2" class="status">Sem dados</div>
       </div>
+      <div class="card">
+        <div><strong>Placar V2</strong></div>
+        <div id="scoreV2" class="status">Sem dados</div>
+      </div>
     </div>
 
 
@@ -88,6 +96,8 @@
       const lastPredV2El = document.getElementById('lastPredV2');
       const telemetryEl = document.getElementById('telemetry');
       const telemetryV2El = document.getElementById('telemetryV2');
+      const scoreEl = document.getElementById('score');
+      const scoreV2El = document.getElementById('scoreV2');
 
       async function call(path, method = 'GET') {
         const res = await fetch(path, { method });
@@ -142,6 +152,20 @@
         }
       }
 
+      function renderScore(s) {
+        try {
+          const p = s.placar || {};
+          const linhas = [
+            `Acertos: ${p.acertos ?? 0}`,
+            `Erros: ${p.erros ?? 0}`,
+            `Pendentes: ${p.pendentes ?? 0}`,
+          ];
+          scoreEl.textContent = linhas.join('\n');
+        } catch (e) {
+          scoreEl.textContent = 'Erro ao renderizar placar: ' + e;
+        }
+      }
+
       function renderLastPredictionV2(s) {
         try {
           const up = s.ultima_previsao || {};
@@ -188,6 +212,20 @@
         }
       }
 
+      function renderScoreV2(s) {
+        try {
+          const p = s.placar || {};
+          const linhas = [
+            `Acertos: ${p.acertos ?? 0}`,
+            `Erros: ${p.erros ?? 0}`,
+            `Pendentes: ${p.pendentes ?? 0}`,
+          ];
+          scoreV2El.textContent = linhas.join('\n');
+        } catch (e) {
+          scoreV2El.textContent = 'Erro ao renderizar placar (V2): ' + e;
+        }
+      }
+
       function formatPercent(x) {
         if (x === null || x === undefined) return '-';
         try { return Math.round(Number(x) * 10000) / 100 + '%'; } catch { return '-'; }
@@ -228,6 +266,7 @@
           renderLastPrediction(s);
           renderHistory(s);
           renderTelemetry(s);
+          renderScore(s);
         } catch (e) {
           statusEl.textContent = 'Erro ao obter status: ' + e;
         }
@@ -257,6 +296,7 @@
           renderLastPredictionV2(s);
           renderHistoryV2(s);
           renderTelemetryV2(s);
+          renderScoreV2(s);
         } catch (e) {
           statusV2El.textContent = 'Erro ao obter status V2: ' + e;
         }
