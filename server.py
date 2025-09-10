@@ -18,6 +18,7 @@ from robo_core import (
     FREQ_MIN,
     TAMANHO_TAXA_MOVEL,
 )
+from robo_core_v2 import RoboHibridoV2, SHEET_ID_V2, SHEET_NAME_DADOS_V2, SHEET_NAME_PREVISOES_V2
 
 
 app = FastAPI(title="Robo Híbrido Controller")
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 
 worker = RoboHibrido()
+worker_v2 = RoboHibridoV2()
 
 
 @app.get("/status")
@@ -61,6 +63,46 @@ def stop():
     worker.stop()
     return JSONResponse({"ok": True, **worker.status()})
 
+
+# V2 endpoints
+@app.get("/v2/status")
+def v2_status():
+    return JSONResponse(worker_v2.status())
+
+
+@app.post("/v2/start")
+def v2_start():
+    worker_v2.start()
+    return JSONResponse({"ok": True, **worker_v2.status()})
+
+
+@app.post("/v2/pause")
+def v2_pause():
+    worker_v2.pause()
+    return JSONResponse({"ok": True, **worker_v2.status()})
+
+
+@app.post("/v2/resume")
+def v2_resume():
+    worker_v2.resume()
+    return JSONResponse({"ok": True, **worker_v2.status()})
+
+
+@app.post("/v2/stop")
+def v2_stop():
+    worker_v2.stop()
+    return JSONResponse({"ok": True, **worker_v2.status()})
+
+
+@app.get("/v2/config")
+def v2_get_config():
+    return JSONResponse(
+        {
+            "SHEET_ID_V2": SHEET_ID_V2,
+            "SHEET_NAME_DADOS_V2": SHEET_NAME_DADOS_V2,
+            "SHEET_NAME_PREVISOES_V2": SHEET_NAME_PREVISOES_V2,
+        }
+    )
 
 @app.get("/")
 def root():
