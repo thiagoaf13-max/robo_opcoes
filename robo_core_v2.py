@@ -9,6 +9,7 @@ import numpy as np
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.calibration import CalibratedClassifierCV
 from lightgbm import LGBMClassifier
+from uuid import uuid4
 
 # Reuso de utilitários do V1
 from robo_core import (
@@ -331,7 +332,8 @@ class RoboHibridoV2:
                 if confianca_final >= LIMITE_CONFIANCA:
                     alerta = "🚨" if confianca_final >= ALERTA_CONFIANCA else ""
                     escrever_log(f"{alerta} ➡️ (V2) Previsão registrada: alvo {horario_alvo} | {texto_prev}")
-                    registrar_previsao_google(aba_prev, texto_prev, confianca_final, horario_alvo)
+                    prediction_id = f"V2-{int(time.time()*1000)}-{uuid4().hex[:6]}"
+                    registrar_previsao_google(aba_prev, prediction_id, rotulo, texto_prev, confianca_final, horario_alvo)
                     historico_resultados.append(1 if pred_label == 1 else 0)
                     if len(historico_resultados) > TAMANHO_TAXA_MOVEL:
                         historico_resultados.pop(0)
@@ -345,6 +347,7 @@ class RoboHibridoV2:
                                 "alvo_dt": alvo_dt,
                                 "alvo_key": alvo_dt.strftime("%Y-%m-%d %H:%M"),
                                 "pred_label": int(pred_label),
+                                "prediction_id": prediction_id,
                             })
                         except Exception:
                             pass
@@ -389,8 +392,10 @@ class RoboHibridoV2:
                             else:
                                 if int(p.get("pred_label", 0)) == int(res):
                                     self._acertos_count += 1
+                                    atualizar_resultado_previsao(aba_prev, p.get("prediction_id", ""), "ACERTO")
                                 else:
                                     self._erros_count += 1
+                                    atualizar_resultado_previsao(aba_prev, p.get("prediction_id", ""), "ERRO")
                         self._previsoes_pendentes = ainda_pendentes
                 except Exception:
                     pass

@@ -9,6 +9,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from sklearn.ensemble import RandomForestClassifier
+from uuid import uuid4
 from sklearn.calibration import CalibratedClassifierCV
 
 
@@ -201,17 +202,48 @@ def proximo_slot_5min(base_dt: Optional[datetime] = None) -> datetime:
 # ==============================
 # REGISTRAR PREVISÃO
 # ==============================
-def registrar_previsao_google(aba_prev: gspread.Worksheet, texto_prev: str, confianca_final: float, horario_alvo: str) -> None:
+def registrar_previsao_google(
+    aba_prev: gspread.Worksheet,
+    prediction_id: str,
+    rotulo: str,
+    texto_prev: str,
+    confianca_final: float,
+    horario_alvo: str,
+) -> None:
     try:
+        # Colunas: ID | criado_em | texto | confianca | horario_alvo | label | resultado | resolvido_em
         linha = [
+            prediction_id,
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             texto_prev,
             round(confianca_final, 4),
             horario_alvo,
+            rotulo,
+            "PENDENTE",
+            "",
         ]
         aba_prev.append_row(linha)
     except Exception as e:
         escrever_log(f"❌ Erro ao gravar previsão no Sheets: {e}")
+
+
+def atualizar_resultado_previsao(
+    aba_prev: gspread.Worksheet,
+    prediction_id: str,
+    resultado: str,
+) -> None:
+    """Atualiza a linha da previsão (pela coluna ID) com o resultado e timestamp de resolução."""
+    try:
+        cel = aba_prev.find(prediction_id)
+        if cel is None:
+            return
+        row = cel.row
+        # Resultado na coluna 7, resolvido_em na coluna 8 (conforme ordem acima)
+        agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        aba_prev.update_cell(row, 7, resultado)
+        aba_prev.update_cell(row, 8, agora)
+    except Exception as e:
+        escrever_log(f"⚠️ Erro ao atualizar resultado no Sheets (ID={prediction_id}): {e}")
 
 
 class RoboHibrido:
@@ -459,7 +491,8 @@ class RoboHibrido:
                 if confianca_final >= LIMITE_CONFIANCA:
                     alerta = "🚨" if confianca_final >= ALERTA_CONFIANCA else ""
                     escrever_log(f"{alerta} ➡️ Previsão registrada: alvo {horario_alvo} | {texto_prev}")
-                    registrar_previsao_google(aba_prev, texto_prev, confianca_final, horario_alvo)
+                    prediction_id = f"V1-{int(time.time()*1000)}-{uuid4().hex[:6]}"
+                    registrar_previsao_google(aba_prev, prediction_id, rotulo, texto_prev, confianca_final, horario_alvo)
 
                     historico_resultados.append(1 if int(pred) == 1 else 0)
                     if len(historico_resultados) > TAMANHO_TAXA_MOVEL:
@@ -475,6 +508,7 @@ class RoboHibrido:
                                 "alvo_dt": alvo_dt,
                                 "alvo_key": alvo_dt.strftime("%Y-%m-%d %H:%M"),
                                 "pred_label": int(pred),
+                                "prediction_id": prediction_id,
                             })
                         except Exception:
                             pass
@@ -516,8 +550,10 @@ class RoboHibrido:
                             else:
                                 if int(p.get("pred_label", 0)) == int(res):
                                     self._acertos_count += 1
+                                    atualizar_resultado_previsao(aba_prev, p.get("prediction_id", ""), "ACERTO")
                                 else:
                                     self._erros_count += 1
+                                    atualizar_resultado_previsao(aba_prev, p.get("prediction_id", ""), "ERRO")
                         self._previsoes_pendentes = ainda_pendentes
                 except Exception:
                     pass
