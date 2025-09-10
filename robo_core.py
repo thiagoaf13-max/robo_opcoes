@@ -31,10 +31,10 @@ FREQ_MIN = int(os.getenv("FREQ_MIN", "5"))
 TAMANHO_TAXA_MOVEL = int(os.getenv("TAMANHO_TAXA_MOVEL", "24"))
 
 # Pesos das contribuições (modelo, histórico por slot, histórico por dia-da-semana+slot, padrão de sequência)
-WEIGHT_MODEL = float(os.getenv("WEIGHT_MODEL", "0.4"))
-WEIGHT_SLOT = float(os.getenv("WEIGHT_SLOT", "0.2"))
-WEIGHT_WEEKDAY_SLOT = float(os.getenv("WEIGHT_WEEKDAY_SLOT", "0.2"))
-WEIGHT_PATTERN = float(os.getenv("WEIGHT_PATTERN", "0.2"))
+WEIGHT_MODEL = float(os.getenv("WEIGHT_MODEL", "0.15"))
+WEIGHT_SLOT = float(os.getenv("WEIGHT_SLOT", "0.4"))
+WEIGHT_WEEKDAY_SLOT = float(os.getenv("WEIGHT_WEEKDAY_SLOT", "0.4"))
+WEIGHT_PATTERN = float(os.getenv("WEIGHT_PATTERN", "0.05"))
 
 # Calibração e estratégia de treino
 CALIBRACAO_TIPO = os.getenv("CALIBRACAO_TIPO", "none").strip().lower()  # none|platt|isotonic
