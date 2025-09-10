@@ -8,20 +8,21 @@
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif; margin: 24px; color: #1f2937; }
       h1 { font-size: 22px; margin-bottom: 8px; }
       .subtitle { color: #6b7280; margin-bottom: 20px; }
-      .row { display: flex; gap: 12px; margin-bottom: 18px; }
+      .row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
       button { padding: 10px 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
       .start { background: #10b981; color: white; }
       .pause { background: #f59e0b; color: white; }
       .stop { background: #ef4444; color: white; }
       .resume { background: #3b82f6; color: white; }
-      .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; max-width: 640px; }
+      .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; max-width: 920px; }
       .status { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; background: #f9fafb; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
       a { color: #3b82f6; text-decoration: none; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
     </style>
   </head>
   <body>
     <h1>Painel do Robô Híbrido</h1>
-    <div class="subtitle">Controle: iniciar, pausar, retomar e parar. Atualiza status a cada 3s.</div>
+    <div class="subtitle">Controle do robô sem terminal. Status atualiza a cada 3s.</div>
 
     <div class="row">
       <button class="start" id="btnStart">Iniciar</button>
@@ -30,23 +31,104 @@
       <button class="stop" id="btnStop">Parar</button>
     </div>
 
-    <div class="card">
-      <div><strong>Status</strong></div>
-      <div id="status" class="status">Carregando...</div>
+    <div class="grid">
+      <div class="card">
+        <div><strong>Status</strong></div>
+        <div id="status" class="status">Carregando...</div>
+      </div>
+      <div class="card">
+        <div><strong>Histórico de Previsões (5 últimas)</strong></div>
+        <div id="hist" class="status">Sem histórico</div>
+      </div>
     </div>
+
+    <div class="card" style="margin-top: 12px;">
+      <div><strong>Última Previsão</strong></div>
+      <div id="lastPred" class="status">Sem dados ainda</div>
+    </div>
+
+    
 
     <script>
       const statusEl = document.getElementById('status');
+      const lastPredEl = document.getElementById('lastPred');
 
       async function call(path, method = 'GET') {
         const res = await fetch(path, { method });
-        return await res.json();
+        if (!res.ok) throw new Error(await res.text());
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) return res.json();
+        return res.text();
+      }
+
+      function renderLastPrediction(s) {
+        try {
+          const up = s.ultima_previsao || {};
+          const cont = s.contadores || {};
+          const linhas = [
+            `Label: ${up.label ?? '-'}`,
+            `Conf. final: ${up.confianca_final ?? '-'} | modelo: ${up.confianca_modelo ?? '-'} | conf. horário: ${up.confianca_horario ?? '-'}`,
+            `Slot: ${up.slot ?? '-'}`,
+            `Texto: ${up.texto ?? '-'}`,
+            `Registradas: ${cont.registradas ?? 0} | Ignoradas: ${cont.ignoradas ?? 0}`,
+            `Taxa móvel: ${s.taxa_movel ?? '-'}`,
+          ];
+          lastPredEl.textContent = linhas.join('\n');
+        } catch (e) {
+          lastPredEl.textContent = 'Erro ao renderizar última previsão: ' + e;
+        }
+      }
+
+      function renderHistory(s) {
+        try {
+          const hist = s.historico_previsoes || [];
+          if (!hist.length) { document.getElementById('hist').textContent = 'Sem histórico'; return; }
+          const linhas = hist.map(h => `${h.timestamp} | ${h.slot} | ${h.label} | conf: ${h.confianca_final}`);
+          document.getElementById('hist').textContent = linhas.join('\n');
+        } catch (e) {
+          document.getElementById('hist').textContent = 'Erro ao renderizar histórico: ' + e;
+        }
+      }
+
+      function formatPercent(x) {
+        if (x === null || x === undefined) return '-';
+        try { return Math.round(Number(x) * 10000) / 100 + '%'; } catch { return '-'; }
       }
 
       async function refresh() {
         try {
           const s = await call('/status');
-          statusEl.textContent = JSON.stringify(s, null, 2);
+          const up = s.ultima_previsao || {};
+
+          const estado = s.running ? (s.paused ? '⏸️ Pausado' : '▶️ Rodando') : '⏹️ Parado';
+          const alvo = s.ultimo_horario_alvo ? s.ultimo_horario_alvo : '-';
+
+          // Label amigável
+          let label = '-';
+          if (up.label) {
+            const low = String(up.label).toLowerCase();
+            if (low.includes('acerto')) label = '✅ ACERTO';
+            else if (low.includes('erro')) label = '❌ ERRO';
+            else label = 'ℹ️ ' + up.label;
+          }
+
+          // Emojis por confiança final
+          let confEmoji = '';
+          const cf = Number(up.confianca_final || 0);
+          if (cf >= 0.9) confEmoji = '🚨';
+          else if (cf >= 0.7) confEmoji = '🟢';
+          else if (cf > 0) confEmoji = '🟡';
+
+          const linhas = [
+            `${estado}`,
+            `🕒 Próximo: ${alvo}`,
+            `📊 Sinal: ${label}`,
+            `🔮 Confiança: ${formatPercent(up.confianca_final)} ${confEmoji}`,
+          ];
+          statusEl.textContent = linhas.join('\n');
+
+          renderLastPrediction(s);
+          renderHistory(s);
         } catch (e) {
           statusEl.textContent = 'Erro ao obter status: ' + e;
         }
@@ -57,10 +139,10 @@
       document.getElementById('btnResume').onclick = async () => { await call('/resume', 'POST'); refresh(); };
       document.getElementById('btnStop').onclick = async () => { await call('/stop', 'POST'); refresh(); };
 
+      
+
       refresh();
       setInterval(refresh, 3000);
     </script>
   </body>
-  </html>
-
-
+</html>

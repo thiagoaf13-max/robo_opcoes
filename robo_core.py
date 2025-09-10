@@ -9,6 +9,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.calibration import CalibratedClassifierCV
 
 
 # ==============================
@@ -27,6 +28,11 @@ LIMITE_CONFIANCA = float(os.getenv("LIMITE_CONFIANCA", "0.70"))
 ALERTA_CONFIANCA = float(os.getenv("ALERTA_CONFIANCA", "0.90"))
 FREQ_MIN = int(os.getenv("FREQ_MIN", "5"))
 TAMANHO_TAXA_MOVEL = int(os.getenv("TAMANHO_TAXA_MOVEL", "24"))
+
+# Calibração e estratégia de treino
+CALIBRACAO_TIPO = os.getenv("CALIBRACAO_TIPO", "none").strip().lower()  # none|platt|isotonic
+TREINO_CADA_CICLOS = int(os.getenv("TREINO_CADA_CICLOS", "1"))  # 1 mantém comportamento atual
+TREINO_SOMENTE_SE_DADOS_MUDARAM = os.getenv("TREINO_SOMENTE_SE_DADOS_MUDARAM", "true").strip().lower() in {"1", "true", "yes", "y"}
 
 
 # ==============================
@@ -211,6 +217,25 @@ class RoboHibrido:
         self._ultimo_horario_alvo: Optional[str] = None
         self._ultima_msg: Optional[str] = None
 
+        # Detalhes da última previsão
+        self._ultima_prev_texto: Optional[str] = None
+        self._ultima_prev_confianca_modelo: Optional[float] = None
+        self._ultima_prev_confianca_horario: Optional[float] = None
+        self._ultima_prev_confianca_final: Optional[float] = None
+        self._ultima_prev_label: Optional[str] = None
+        self._ultima_prev_slot: Optional[str] = None
+
+        # Contadores e métricas simples
+        self._registradas_count: int = 0
+        self._ignoradas_count: int = 0
+        self._taxa_movel_atual: Optional[float] = None
+
+        # Histórico de previsões (mantém até 50 para consulta)
+        self._historico_previsoes: list[Dict[str, Any]] = []
+        # Controle de treino inteligente
+        self._ciclos_desde_ultimo_treino: int = 0
+        self._ultimo_hash_dados: Optional[int] = None
+
     # ---------- Status ----------
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -219,6 +244,24 @@ class RoboHibrido:
                 "paused": self._is_paused,
                 "ultimo_horario_alvo": self._ultimo_horario_alvo,
                 "ultima_msg": self._ultima_msg,
+                # Última previsão detalhada
+                "ultima_previsao": {
+                    "texto": self._ultima_prev_texto,
+                    "confianca_modelo": self._ultima_prev_confianca_modelo,
+                    "confianca_horario": self._ultima_prev_confianca_horario,
+                    "confianca_final": self._ultima_prev_confianca_final,
+                    "label": self._ultima_prev_label,
+                    "slot": self._ultima_prev_slot,
+                },
+                # Contadores
+                "contadores": {
+                    "registradas": self._registradas_count,
+                    "ignoradas": self._ignoradas_count,
+                },
+                # Métrica móvel (sobre últimas N registradas)
+                "taxa_movel": self._taxa_movel_atual,
+                # Últimas 5 previsões
+                "historico_previsoes": self._historico_previsoes[-5:],
             }
 
     # ---------- Controle ----------
@@ -306,9 +349,29 @@ class RoboHibrido:
                 X = df[feature_cols].fillna(0)
                 y = df["resultado"]
 
-                modelo = RandomForestClassifier(n_estimators=200, random_state=42)
-                modelo.fit(X, y)
-                escrever_log(f"🔄 Modelo treinado com {len(X)} linhas (lags preenchidos com 0 para fit).")
+                # Critérios para treino inteligente
+                dados_hash = hash((tuple(X.tail(50).to_numpy().ravel()), tuple(y.tail(50).tolist()), len(X)))
+                precisa_treinar_por_ciclo = (self._ciclos_desde_ultimo_treino >= max(1, TREINO_CADA_CICLOS))
+                dados_mudaram = (self._ultimo_hash_dados is None) or (self._ultimo_hash_dados != dados_hash)
+                cond_mudanca = (not TREINO_SOMENTE_SE_DADOS_MUDARAM) or dados_mudaram
+
+                if modelo is None or precisa_treinar_por_ciclo or cond_mudanca:
+                    base_model = RandomForestClassifier(n_estimators=200, random_state=42)
+                    if CALIBRACAO_TIPO in {"platt", "isotonic"}:
+                        metodo = "sigmoid" if CALIBRACAO_TIPO == "platt" else "isotonic"
+                        modelo = CalibratedClassifierCV(base_model, method=metodo, cv=3)
+                    else:
+                        modelo = base_model
+
+                    modelo.fit(X, y)
+                    self._ciclos_desde_ultimo_treino = 0
+                    self._ultimo_hash_dados = dados_hash
+                    escrever_log(
+                        f"🔄 Modelo treinado com {len(X)} linhas | calib: {CALIBRACAO_TIPO} | critério: ciclos>={TREINO_CADA_CICLOS} mudanca={dados_mudaram}"
+                    )
+                else:
+                    self._ciclos_desde_ultimo_treino += 1
+                    escrever_log("⏭️ Treino pulado (sem necessidade pelo critério atual).")
 
                 prob_horario = calcular_probabilidade_horario(df)
 
@@ -342,6 +405,26 @@ class RoboHibrido:
 
                 with self._lock:
                     self._ultimo_horario_alvo = horario_alvo
+                    # Atualiza última previsão (independente de registrar ou não)
+                    self._ultima_prev_texto = texto_prev
+                    self._ultima_prev_confianca_modelo = round(confianca_modelo_ajustada, 4)
+                    self._ultima_prev_confianca_horario = round(confianca_horario, 4)
+                    self._ultima_prev_confianca_final = round(confianca_final, 4)
+                    self._ultima_prev_label = rotulo
+                    self._ultima_prev_slot = slot_str
+
+                    # Registra no histórico (limita a 50 itens)
+                    self._historico_previsoes.append({
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "slot": slot_str,
+                        "label": rotulo,
+                        "confianca_final": round(confianca_final, 4),
+                        "confianca_modelo": round(confianca_modelo_ajustada, 4),
+                        "confianca_horario": round(confianca_horario, 4),
+                        "texto": texto_prev,
+                    })
+                    if len(self._historico_previsoes) > 50:
+                        self._historico_previsoes.pop(0)
 
                 if confianca_final >= LIMITE_CONFIANCA:
                     alerta = "🚨" if confianca_final >= ALERTA_CONFIANCA else ""
@@ -351,8 +434,14 @@ class RoboHibrido:
                     historico_resultados.append(1 if int(pred) == 1 else 0)
                     if len(historico_resultados) > TAMANHO_TAXA_MOVEL:
                         historico_resultados.pop(0)
+                    with self._lock:
+                        self._registradas_count += 1
+                        # taxa móvel é média do histórico das registradas
+                        self._taxa_movel_atual = round(sum(historico_resultados) / len(historico_resultados), 4) if historico_resultados else None
                 else:
                     escrever_log(f"⚠️ Previsão ignorada (baixa confiança): {texto_prev}")
+                    with self._lock:
+                        self._ignoradas_count += 1
 
                 self._sleep_ate_proximo_slot()
 
