@@ -30,6 +30,12 @@ ALERTA_CONFIANCA = float(os.getenv("ALERTA_CONFIANCA", "0.90"))
 FREQ_MIN = int(os.getenv("FREQ_MIN", "5"))
 TAMANHO_TAXA_MOVEL = int(os.getenv("TAMANHO_TAXA_MOVEL", "24"))
 
+# Pesos das contribuições (modelo, histórico por slot, histórico por dia-da-semana+slot, padrão de sequência)
+WEIGHT_MODEL = float(os.getenv("WEIGHT_MODEL", "0.4"))
+WEIGHT_SLOT = float(os.getenv("WEIGHT_SLOT", "0.2"))
+WEIGHT_WEEKDAY_SLOT = float(os.getenv("WEIGHT_WEEKDAY_SLOT", "0.2"))
+WEIGHT_PATTERN = float(os.getenv("WEIGHT_PATTERN", "0.2"))
+
 # Calibração e estratégia de treino
 CALIBRACAO_TIPO = os.getenv("CALIBRACAO_TIPO", "none").strip().lower()  # none|platt|isotonic
 TREINO_CADA_CICLOS = int(os.getenv("TREINO_CADA_CICLOS", "1"))  # 1 mantém comportamento atual
@@ -177,6 +183,40 @@ def calcular_probabilidade_horario(df: pd.DataFrame) -> Dict[str, float]:
     if tmp.empty:
         return {}
     prob = tmp.groupby("slot")["resultado"].mean().to_dict()
+    return prob
+
+
+def calcular_probabilidade_semana_slot(df: pd.DataFrame) -> Dict[str, float]:
+    if df is None or df.empty:
+        return {}
+    tmp = df.dropna(subset=["resultado", "dia_semana", "slot"]).copy()
+    if tmp.empty:
+        return {}
+    tmp.loc[:, "semana_slot_key"] = tmp["dia_semana"].astype(int).astype(str) + "-" + tmp["slot"].astype(str)
+    prob = tmp.groupby("semana_slot_key")["resultado"].mean().to_dict()
+    return prob
+
+
+def calcular_probabilidade_padrao_sequencia(df: pd.DataFrame, ordem: int) -> Dict[tuple, float]:
+    if df is None or df.empty or ordem <= 0:
+        return {}
+    cols = [f"lag_{i}" for i in range(1, ordem + 1)]
+    if not set(cols).issubset(df.columns):
+        return {}
+    tmp = df.dropna(subset=cols + ["resultado"]).copy()
+    if tmp.empty:
+        return {}
+    # cria tupla de lags como chave
+    def mk_key(row):
+        try:
+            return tuple(int(row[c]) for c in cols)
+        except Exception:
+            return None
+    tmp.loc[:, "padrao_key"] = tmp.apply(mk_key, axis=1)
+    tmp = tmp.dropna(subset=["padrao_key"])  # remove onde key None
+    if tmp.empty:
+        return {}
+    prob = tmp.groupby("padrao_key")["resultado"].mean().to_dict()
     return prob
 
 
@@ -430,6 +470,8 @@ class RoboHibrido:
                     escrever_log("⏭️ Treino pulado (sem necessidade pelo critério atual).")
 
                 prob_horario = calcular_probabilidade_horario(df)
+                prob_semana_slot = calcular_probabilidade_semana_slot(df)
+                prob_padrao = calcular_probabilidade_padrao_sequencia(df, ordem=min(5, NUM_LAGS))
 
                 # Usa lags da última linha, porém ajusta hora/minuto/dia_semana para o PRÓXIMO slot
                 ultimo = df[feature_cols].iloc[-1:].copy()
@@ -455,8 +497,26 @@ class RoboHibrido:
 
                 slot_str = prox.strftime("%H:%M")
                 confianca_horario = prob_horario.get(slot_str, 0.5)
+                semana_slot_key = f"{prox.weekday()}-{slot_str}"
+                confianca_semana_slot = prob_semana_slot.get(semana_slot_key, 0.5)
+                # Padrão de sequência: usa lags atuais como chave
+                lags_tuple = None
+                try:
+                    lags_vals = [int(df[f"lag_{i}"].iloc[-1]) for i in range(1, min(5, NUM_LAGS) + 1)]
+                    if all(v in (0, 1) for v in lags_vals):
+                        lags_tuple = tuple(lags_vals)
+                except Exception:
+                    lags_tuple = None
+                confianca_padrao = prob_padrao.get(lags_tuple, 0.5) if lags_tuple is not None else 0.5
 
-                confianca_final = (confianca_modelo_ajustada + confianca_horario) / 2
+                # Combinação ponderada
+                peso_total = max(1e-6, WEIGHT_MODEL + WEIGHT_SLOT + WEIGHT_WEEKDAY_SLOT + WEIGHT_PATTERN)
+                confianca_final = (
+                    WEIGHT_MODEL * confianca_modelo_ajustada
+                    + WEIGHT_SLOT * confianca_horario
+                    + WEIGHT_WEEKDAY_SLOT * confianca_semana_slot
+                    + WEIGHT_PATTERN * confianca_padrao
+                ) / peso_total
 
                 rotulo = "ACERTO (verde)" if int(pred) == 1 else "ERRO (vermelho)"
                 texto_prev = (
@@ -471,6 +531,12 @@ class RoboHibrido:
                     self._ultima_prev_texto = texto_prev
                     self._ultima_prev_confianca_modelo = round(confianca_modelo_ajustada, 4)
                     self._ultima_prev_confianca_horario = round(confianca_horario, 4)
+                    # Novas contribuições
+                    try:
+                        self._ultima_prev_confianca_semana_slot = round(confianca_semana_slot, 4)
+                        self._ultima_prev_confianca_padrao = round(confianca_padrao, 4)
+                    except Exception:
+                        pass
                     self._ultima_prev_confianca_final = round(confianca_final, 4)
                     self._ultima_prev_label = rotulo
                     self._ultima_prev_slot = slot_str

@@ -17,6 +17,8 @@ from robo_core import (
     carregar_dados_google,
     preparar_dados,
     calcular_probabilidade_horario,
+    calcular_probabilidade_semana_slot,
+    calcular_probabilidade_padrao_sequencia,
     proximo_slot_5min,
     registrar_previsao_google,
     escrever_log,
@@ -25,6 +27,10 @@ from robo_core import (
     ALERTA_CONFIANCA,
     FREQ_MIN,
     TAMANHO_TAXA_MOVEL,
+    WEIGHT_MODEL,
+    WEIGHT_SLOT,
+    WEIGHT_WEEKDAY_SLOT,
+    WEIGHT_PATTERN,
 )
 
 
@@ -250,6 +256,8 @@ class RoboHibridoV2:
 
                 # Confiança histórica por slot das amostras de validação
                 prob_horario = calcular_probabilidade_horario(df)
+                prob_semana_slot = calcular_probabilidade_semana_slot(df)
+                prob_padrao = calcular_probabilidade_padrao_sequencia(df, ordem=min(5, NUM_LAGS))
                 slots_val = df.loc[X_all.index, "slot"].reindex(X_val.index)
                 conf_horario_val = np.array([prob_horario.get(str(s), 0.5) for s in slots_val])
 
@@ -298,7 +306,26 @@ class RoboHibridoV2:
 
                 slot_str = prox.strftime("%H:%M")
                 confianca_horario = prob_horario.get(slot_str, 0.5)
-                confianca_final = (confianca_modelo_ajustada + confianca_horario) / 2
+                semana_slot_key = f"{prox.weekday()}-{slot_str}"
+                confianca_semana_slot = prob_semana_slot.get(semana_slot_key, 0.5)
+                # Padrão sequência baseado nos lags da última linha do df
+                lags_tuple = None
+                try:
+                    lags_vals = [int(df[f"lag_{i}"].iloc[-1]) for i in range(1, min(5, NUM_LAGS) + 1)]
+                    if all(v in (0, 1) for v in lags_vals):
+                        lags_tuple = tuple(lags_vals)
+                except Exception:
+                    lags_tuple = None
+                confianca_padrao = prob_padrao.get(lags_tuple, 0.5) if lags_tuple is not None else 0.5
+
+                # Combinação ponderada
+                peso_total = max(1e-6, WEIGHT_MODEL + WEIGHT_SLOT + WEIGHT_WEEKDAY_SLOT + WEIGHT_PATTERN)
+                confianca_final = (
+                    WEIGHT_MODEL * confianca_modelo_ajustada
+                    + WEIGHT_SLOT * confianca_horario
+                    + WEIGHT_WEEKDAY_SLOT * confianca_semana_slot
+                    + WEIGHT_PATTERN * confianca_padrao
+                ) / peso_total
 
                 # Decisão usando limiar otimizado NA CONFIANÇA COMBINADA
                 pred_label = 1 if confianca_final >= self._threshold_decisao else 0
@@ -314,6 +341,11 @@ class RoboHibridoV2:
                     self._ultima_prev_texto = texto_prev
                     self._ultima_prev_confianca_modelo = round(confianca_modelo_ajustada, 4)
                     self._ultima_prev_confianca_horario = round(confianca_horario, 4)
+                    try:
+                        self._ultima_prev_confianca_semana_slot = round(confianca_semana_slot, 4)
+                        self._ultima_prev_confianca_padrao = round(confianca_padrao, 4)
+                    except Exception:
+                        pass
                     self._ultima_prev_confianca_final = round(confianca_final, 4)
                     self._ultima_prev_label = rotulo
                     self._ultima_prev_slot = slot_str
