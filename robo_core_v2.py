@@ -70,6 +70,11 @@ class RoboHibridoV2:
         # Telemetria simples
         self._telemetria: Dict[str, Any] = {}
 
+        # Placar e pendências de validação
+        self._acertos_count: int = 0
+        self._erros_count: int = 0
+        self._previsoes_pendentes: list[Dict[str, Any]] = []
+
     # ---------- Status ----------
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -95,6 +100,11 @@ class RoboHibridoV2:
                 "threshold": self._threshold_decisao,
                 "calibracao": V2_CALIBRACAO_TIPO,
                 "telemetria": self._telemetria,
+                "placar": {
+                    "acertos": self._acertos_count,
+                    "erros": self._erros_count,
+                    "pendentes": len(self._previsoes_pendentes),
+                },
             }
 
     # ---------- Controle ----------
@@ -328,6 +338,16 @@ class RoboHibridoV2:
                     with self._lock:
                         self._registradas_count += 1
                         self._taxa_movel_atual = round(sum(historico_resultados) / len(historico_resultados), 4) if historico_resultados else None
+                        # adiciona previsão pendente de validação
+                        try:
+                            alvo_dt = datetime.strptime(horario_alvo, "%Y-%m-%d %H:%M:%S")
+                            self._previsoes_pendentes.append({
+                                "alvo_dt": alvo_dt,
+                                "alvo_key": alvo_dt.strftime("%Y-%m-%d %H:%M"),
+                                "pred_label": int(pred_label),
+                            })
+                        except Exception:
+                            pass
                 else:
                     escrever_log(f"⚠️ (V2) Previsão ignorada (baixa confiança): {texto_prev}")
                     with self._lock:
@@ -352,6 +372,26 @@ class RoboHibridoV2:
                             "proximo_slot": slot_str,
                             "limiar": round(self._threshold_decisao, 4),
                         }
+                except Exception:
+                    pass
+
+                # Atualiza placar comparando previsões pendentes com resultados da planilha
+                try:
+                    if not df.empty and self._previsoes_pendentes:
+                        keys = df.dropna(subset=["datetime_horario", "resultado"]).copy()
+                        keys.loc[:, "_key"] = keys["datetime_horario"].dt.strftime("%Y-%m-%d %H:%M")
+                        key_to_result = {k: int(v) for k, v in zip(keys["_key"].tolist(), keys["resultado"].tolist())}
+                        ainda_pendentes: list[Dict[str, Any]] = []
+                        for p in self._previsoes_pendentes:
+                            res = key_to_result.get(p.get("alvo_key"))
+                            if res is None:
+                                ainda_pendentes.append(p)
+                            else:
+                                if int(p.get("pred_label", 0)) == int(res):
+                                    self._acertos_count += 1
+                                else:
+                                    self._erros_count += 1
+                        self._previsoes_pendentes = ainda_pendentes
                 except Exception:
                     pass
 
