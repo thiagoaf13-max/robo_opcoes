@@ -244,6 +244,9 @@ class RoboHibrido:
         self._ciclos_desde_ultimo_treino: int = 0
         self._ultimo_hash_dados: Optional[int] = None
 
+        # Telemetria simples
+        self._telemetria: Dict[str, Any] = {}
+
     # ---------- Status ----------
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -270,6 +273,8 @@ class RoboHibrido:
                 "taxa_movel": self._taxa_movel_atual,
                 # Últimas 5 previsões
                 "historico_previsoes": self._historico_previsoes[-5:],
+                # Telemetria
+                "telemetria": self._telemetria,
             }
 
     # ---------- Controle ----------
@@ -456,6 +461,25 @@ class RoboHibrido:
                     escrever_log(f"⚠️ Previsão ignorada (baixa confiança): {texto_prev}")
                     with self._lock:
                         self._ignoradas_count += 1
+
+                # Atualiza telemetria básica
+                try:
+                    tmp = y.dropna()
+                    y_total = int(len(tmp))
+                    y_pos = int(tmp.sum()) if y_total > 0 else 0
+                    y_neg = int(y_total - y_pos)
+                    p_pos = round(y_pos / y_total, 4) if y_total > 0 else None
+                    with self._lock:
+                        self._telemetria = {
+                            "y_total": y_total,
+                            "y_pos": y_pos,
+                            "y_neg": y_neg,
+                            "p_pos": p_pos,
+                            "window_rows": int(len(X)),
+                            "proximo_slot": slot_str,
+                        }
+                except Exception:
+                    pass
 
                 self._sleep_ate_proximo_slot()
 

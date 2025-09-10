@@ -47,6 +47,10 @@
         <div><strong>Histórico de Previsões (5 últimas)</strong></div>
         <div id="hist" class="status">Sem histórico</div>
       </div>
+      <div class="card">
+        <div><strong>Telemetria</strong></div>
+        <div id="telemetry" class="status">Sem dados</div>
+      </div>
     </div>
 
     <h2>Robô 2 (V2)</h2>
@@ -70,6 +74,10 @@
         <div><strong>Histórico de Previsões V2 (5 últimas)</strong></div>
         <div id="histV2" class="status">Sem histórico</div>
       </div>
+      <div class="card">
+        <div><strong>Telemetria V2</strong></div>
+        <div id="telemetryV2" class="status">Sem dados</div>
+      </div>
     </div>
 
 
@@ -78,6 +86,8 @@
       const lastPredEl = document.getElementById('lastPred');
       const statusV2El = document.getElementById('statusV2');
       const lastPredV2El = document.getElementById('lastPredV2');
+      const telemetryEl = document.getElementById('telemetry');
+      const telemetryV2El = document.getElementById('telemetryV2');
 
       async function call(path, method = 'GET') {
         const res = await fetch(path, { method });
@@ -116,6 +126,22 @@
         }
       }
 
+      function renderTelemetry(s) {
+        try {
+          const t = s.telemetria || {};
+          const linhas = [
+            `y_total: ${t.y_total ?? '-'}`,
+            `y_pos: ${t.y_pos ?? '-'} | y_neg: ${t.y_neg ?? '-'}`,
+            `p_pos: ${t.p_pos ?? '-'}`,
+            `window_rows: ${t.window_rows ?? '-'}`,
+            `próximo slot: ${t.proximo_slot ?? '-'}`,
+          ];
+          telemetryEl.textContent = linhas.join('\n');
+        } catch (e) {
+          telemetryEl.textContent = 'Erro ao renderizar telemetria: ' + e;
+        }
+      }
+
       function renderLastPredictionV2(s) {
         try {
           const up = s.ultima_previsao || {};
@@ -142,6 +168,23 @@
           document.getElementById('histV2').textContent = linhas.join('\n');
         } catch (e) {
           document.getElementById('histV2').textContent = 'Erro ao renderizar histórico (V2): ' + e;
+        }
+      }
+
+      function renderTelemetryV2(s) {
+        try {
+          const t = s.telemetria || {};
+          const linhas = [
+            `y_total: ${t.y_total ?? '-'}`,
+            `y_pos: ${t.y_pos ?? '-'} | y_neg: ${t.y_neg ?? '-'}`,
+            `p_pos: ${t.p_pos ?? '-'}`,
+            `window_rows: ${t.window_rows ?? '-'}`,
+            `próximo slot: ${t.proximo_slot ?? '-'}`,
+            `limiar: ${t.limiar ?? '-'}`,
+          ];
+          telemetryV2El.textContent = linhas.join('\n');
+        } catch (e) {
+          telemetryV2El.textContent = 'Erro ao renderizar telemetria (V2): ' + e;
         }
       }
 
@@ -184,6 +227,7 @@
 
           renderLastPrediction(s);
           renderHistory(s);
+          renderTelemetry(s);
         } catch (e) {
           statusEl.textContent = 'Erro ao obter status: ' + e;
         }
@@ -212,6 +256,7 @@
           statusV2El.textContent = linhas.join('\n');
           renderLastPredictionV2(s);
           renderHistoryV2(s);
+          renderTelemetryV2(s);
         } catch (e) {
           statusV2El.textContent = 'Erro ao obter status V2: ' + e;
         }
