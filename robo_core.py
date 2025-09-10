@@ -442,32 +442,8 @@ class RoboHibrido:
                     continue
 
                 feature_cols = ["hora", "minuto", "dia_semana"] + [f"lag_{i}" for i in range(1, NUM_LAGS + 1)]
-                X = df[feature_cols].fillna(0)
                 y = df["resultado"]
-
-                # Critérios para treino inteligente
-                dados_hash = hash((tuple(X.tail(50).to_numpy().ravel()), tuple(y.tail(50).tolist()), len(X)))
-                precisa_treinar_por_ciclo = (self._ciclos_desde_ultimo_treino >= max(1, TREINO_CADA_CICLOS))
-                dados_mudaram = (self._ultimo_hash_dados is None) or (self._ultimo_hash_dados != dados_hash)
-                cond_mudanca = (not TREINO_SOMENTE_SE_DADOS_MUDARAM) or dados_mudaram
-
-                if modelo is None or precisa_treinar_por_ciclo or cond_mudanca:
-                    base_model = RandomForestClassifier(n_estimators=200, random_state=42)
-                    if CALIBRACAO_TIPO in {"platt", "isotonic"}:
-                        metodo = "sigmoid" if CALIBRACAO_TIPO == "platt" else "isotonic"
-                        modelo = CalibratedClassifierCV(base_model, method=metodo, cv=3)
-                    else:
-                        modelo = base_model
-
-                    modelo.fit(X, y)
-                    self._ciclos_desde_ultimo_treino = 0
-                    self._ultimo_hash_dados = dados_hash
-                    escrever_log(
-                        f"🔄 Modelo treinado com {len(X)} linhas | calib: {CALIBRACAO_TIPO} | critério: ciclos>={TREINO_CADA_CICLOS} mudanca={dados_mudaram}"
-                    )
-                else:
-                    self._ciclos_desde_ultimo_treino += 1
-                    escrever_log("⏭️ Treino pulado (sem necessidade pelo critério atual).")
+                # V1 simples: não treina modelo; usa apenas pilares (slot, dia+slot e padrão)
 
                 prob_horario = calcular_probabilidade_horario(df)
                 prob_semana_slot = calcular_probabilidade_semana_slot(df)
@@ -487,14 +463,6 @@ class RoboHibrido:
                     escrever_log("⚠️ Último registro não tem lags disponíveis; previsão será mais fraca.")
                 ultimo.fillna(0, inplace=True)
 
-                pred = modelo.predict(ultimo)[0]
-                probas = modelo.predict_proba(ultimo)[0] if hasattr(modelo, "predict_proba") else None
-                confianca_modelo = float(max(probas)) if probas is not None else 0.5
-
-                peso_lags = (lags_disponiveis / NUM_LAGS) if NUM_LAGS > 0 else 1.0
-                fator_conf_modelo = 0.5 + 0.5 * peso_lags
-                confianca_modelo_ajustada = confianca_modelo * fator_conf_modelo
-
                 slot_str = prox.strftime("%H:%M")
                 confianca_horario = prob_horario.get(slot_str, 0.5)
                 semana_slot_key = f"{prox.weekday()}-{slot_str}"
@@ -509,19 +477,15 @@ class RoboHibrido:
                     lags_tuple = None
                 confianca_padrao = prob_padrao.get(lags_tuple, 0.5) if lags_tuple is not None else 0.5
 
-                # Combinação ponderada
-                peso_total = max(1e-6, WEIGHT_MODEL + WEIGHT_SLOT + WEIGHT_WEEKDAY_SLOT + WEIGHT_PATTERN)
-                confianca_final = (
-                    WEIGHT_MODEL * confianca_modelo_ajustada
-                    + WEIGHT_SLOT * confianca_horario
-                    + WEIGHT_WEEKDAY_SLOT * confianca_semana_slot
-                    + WEIGHT_PATTERN * confianca_padrao
-                ) / peso_total
+                # V1 simples: decisão sem modelo (média simples entre dia+slot, slot e padrão)
+                confianca_modelo_ajustada = None
+                confianca_final = (confianca_semana_slot + confianca_horario + confianca_padrao) / 3.0
+                pred = 1 if confianca_final >= 0.5 else 0
 
                 rotulo = "ACERTO (verde)" if int(pred) == 1 else "ERRO (vermelho)"
                 texto_prev = (
-                    f"{rotulo} - {round(confianca_final*100,2)}% (modelo: {round(confianca_modelo_ajustada*100,2)}%, "
-                    f"horário: {round(confianca_horario*100,2)}%)"
+                    f"{rotulo} - {round(confianca_final*100,2)}% (slot: {round(confianca_horario*100,2)}%, "
+                    f"semana+slot: {round(confianca_semana_slot*100,2)}%, padrão: {round(confianca_padrao*100,2)}%)"
                 )
                 horario_alvo = prox.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -529,7 +493,7 @@ class RoboHibrido:
                     self._ultimo_horario_alvo = horario_alvo
                     # Atualiza última previsão (independente de registrar ou não)
                     self._ultima_prev_texto = texto_prev
-                    self._ultima_prev_confianca_modelo = round(confianca_modelo_ajustada, 4)
+                    self._ultima_prev_confianca_modelo = None
                     self._ultima_prev_confianca_horario = round(confianca_horario, 4)
                     # Novas contribuições
                     try:
@@ -547,7 +511,7 @@ class RoboHibrido:
                         "slot": slot_str,
                         "label": rotulo,
                         "confianca_final": round(confianca_final, 4),
-                        "confianca_modelo": round(confianca_modelo_ajustada, 4),
+                        "confianca_modelo": None,
                         "confianca_horario": round(confianca_horario, 4),
                         "texto": texto_prev,
                     })
