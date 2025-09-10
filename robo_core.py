@@ -18,7 +18,7 @@ from sklearn.calibration import CalibratedClassifierCV
 # Carrega variáveis de ambiente do arquivo .env (se existir)
 load_dotenv()
 
-SHEET_ID = os.getenv("SHEET_ID", "114XbIrVhnToZlgHWZd8v9_L9Tvp_UlIiSw9P-f0OzFo")
+SHEET_ID = os.getenv("SHEET_ID", "1iP4Im3GPL21i_xOIVawaca2DjzJU-O9yOjBoptn-m5Y")
 SHEET_NAME_DADOS = os.getenv("SHEET_NAME_DADOS", "Dados")
 SHEET_NAME_PREVISOES = os.getenv("SHEET_NAME_PREVISOES", "Previsões")
 CREDENCIAIS_JSON = os.getenv("CREDENCIAIS_JSON", "credenciais.json")
