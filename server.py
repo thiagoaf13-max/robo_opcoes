@@ -67,6 +67,16 @@ def stop():
     return JSONResponse({"ok": True, **worker.status()})
 
 
+@app.post("/force-once")
+def force_once():
+    # Sinaliza para o V1 ignorar standby uma vez
+    try:
+        worker._force_once = True  # simples, dentro do mesmo processo
+        return JSONResponse({"ok": True, "mensagem": "V1 irá forçar a próxima previsão mesmo sem dados novos."})
+    except Exception as e:
+        return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)
+
+
 # V2 endpoints
 @app.get("/v2/status")
 def v2_status():

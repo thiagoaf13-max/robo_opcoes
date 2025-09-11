@@ -324,7 +324,11 @@ class RoboHibrido:
         self._erros_count: int = 0
         self._previsoes_pendentes: list[Dict[str, Any]] = []
         # Controle para emitir nova previsão somente com dados novos
-        self._ultimo_hash_previsto: Optional[int] = None
+        self._ultimo_hash_previsto: Optional[int] = None  # legado
+        self._ultimo_marker_dt: Optional[pd.Timestamp] = None
+        self._ultimo_marker_len: Optional[int] = None
+        # Botão de "forçar previsão" (ignora standby uma vez)
+        self._force_once: bool = False
 
     # ---------- Status ----------
     def status(self) -> Dict[str, Any]:
@@ -443,18 +447,18 @@ class RoboHibrido:
                     self._sleep_ate_proximo_slot()
                     continue
 
-                # V1: só gera nova previsão quando houver dados novos na planilha
+                # V1: só gera nova previsão quando houver dados novos (marcadores simples)
                 try:
-                    hash_part_a = tuple(df["datetime_horario"].tail(50).astype(str).tolist())
-                    hash_part_b = tuple(df["resultado"].tail(50).fillna(-1).astype(int).tolist())
-                    dados_hash_atual = hash((hash_part_a, hash_part_b, len(df)))
+                    last_dt = pd.to_datetime(df["datetime_horario"]).max()
                 except Exception:
-                    dados_hash_atual = hash(len(df))
-                if self._ultimo_hash_previsto is not None and self._ultimo_hash_previsto == dados_hash_atual:
-                    self._ultima_msg = "Standby: aguardando novos dados na aba Dados."
-                    escrever_log("⏸️ (V1) Standby: sem novos dados; aguardando.")
-                    time.sleep(10)
-                    continue
+                    last_dt = None
+                marker_len = int(len(df))
+                if not self._force_once and self._ultimo_marker_dt is not None and self._ultimo_marker_len is not None:
+                    if (self._ultimo_marker_dt == last_dt) and (self._ultimo_marker_len == marker_len):
+                        self._ultima_msg = "Standby: aguardando novos dados na aba Dados."
+                        escrever_log("⏸️ (V1) Standby: sem novos dados; aguardando.")
+                        time.sleep(10)
+                        continue
 
                 feature_cols = ["hora", "minuto", "dia_semana"] + [f"lag_{i}" for i in range(1, NUM_LAGS + 1)]
                 y = df["resultado"]
@@ -505,7 +509,13 @@ class RoboHibrido:
 
                 with self._lock:
                     self._ultimo_horario_alvo = horario_alvo
-                    self._ultimo_hash_previsto = dados_hash_atual
+                    # Atualiza marcadores de dados e consome flag de forçar previsão
+                    try:
+                        self._ultimo_marker_dt = last_dt
+                        self._ultimo_marker_len = marker_len
+                    except Exception:
+                        pass
+                    self._force_once = False
                     # Atualiza última previsão (independente de registrar ou não)
                     self._ultima_prev_texto = texto_prev
                     self._ultima_prev_confianca_modelo = None

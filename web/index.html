@@ -33,6 +33,7 @@
       <button class="resume" id="btnResume">Retomar</button>
       <button class="stop" id="btnStop">Parar</button>
       <button class="resume" id="btnUpdate">Atualizar</button>
+      <button class="pause" id="btnForce">Forçar previsão V1</button>
     </div>
 
     <div class="grid">
@@ -347,6 +348,14 @@
         }
         refresh();
         refreshV2();
+      };
+      document.getElementById('btnForce').onclick = async () => {
+        try {
+          const res = await call('/force-once', 'POST');
+          alert('V1 vai forçar a próxima previsão.');
+        } catch (e) {
+          alert('Falha ao forçar: ' + e);
+        }
       };
 
       document.getElementById('btnStartV2').onclick = async () => { await call('/v2/start', 'POST'); refreshV2(); };
