@@ -492,15 +492,14 @@ class RoboHibrido:
                     lags_tuple = None
                 confianca_padrao = prob_padrao.get(lags_tuple, 0.5) if lags_tuple is not None else 0.5
 
-                # V1 simples: decisão sem modelo (média simples entre dia+slot, slot e padrão)
+                # V1 ainda mais simples: usa SOMENTE dia-da-semana + slot (pilar principal)
                 confianca_modelo_ajustada = None
-                confianca_final = (confianca_semana_slot + confianca_horario + confianca_padrao) / 3.0
-                pred = 1 if confianca_final >= 0.5 else 0
+                confianca_final = float(confianca_semana_slot)
+                pred = 1 if confianca_semana_slot >= 0.5 else 0
 
                 rotulo = "ACERTO (verde)" if int(pred) == 1 else "ERRO (vermelho)"
                 texto_prev = (
-                    f"{rotulo} - {round(confianca_final*100,2)}% (slot: {round(confianca_horario*100,2)}%, "
-                    f"semana+slot: {round(confianca_semana_slot*100,2)}%, padrão: {round(confianca_padrao*100,2)}%)"
+                    f"{rotulo} - {round(confianca_final*100,2)}% (semana+slot: {round(confianca_semana_slot*100,2)}%)"
                 )
                 horario_alvo = prox.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -510,11 +509,11 @@ class RoboHibrido:
                     # Atualiza última previsão (independente de registrar ou não)
                     self._ultima_prev_texto = texto_prev
                     self._ultima_prev_confianca_modelo = None
-                    self._ultima_prev_confianca_horario = round(confianca_horario, 4)
+                    self._ultima_prev_confianca_horario = None
                     # Novas contribuições
                     try:
                         self._ultima_prev_confianca_semana_slot = round(confianca_semana_slot, 4)
-                        self._ultima_prev_confianca_padrao = round(confianca_padrao, 4)
+                        self._ultima_prev_confianca_padrao = None
                     except Exception:
                         pass
                     self._ultima_prev_confianca_final = round(confianca_final, 4)
@@ -528,7 +527,7 @@ class RoboHibrido:
                         "label": rotulo,
                         "confianca_final": round(confianca_final, 4),
                         "confianca_modelo": None,
-                        "confianca_horario": round(confianca_horario, 4),
+                        "confianca_horario": None,
                         "texto": texto_prev,
                     })
                     if len(self._historico_previsoes) > 50:

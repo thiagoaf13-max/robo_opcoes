@@ -20,6 +20,7 @@ from robo_core import (
     TAMANHO_TAXA_MOVEL,
 )
 from robo_core_v2 import RoboHibridoV2, SHEET_ID_V2, SHEET_NAME_DADOS_V2, SHEET_NAME_PREVISOES_V2
+from robo_core_v3 import RoboSequencias
 
 
 app = FastAPI(title="Robo Híbrido Controller")
@@ -34,6 +35,7 @@ app.add_middleware(
 
 worker = RoboHibrido()
 worker_v2 = RoboHibridoV2()
+worker_v3 = RoboSequencias()
 
 
 @app.get("/status")
@@ -105,6 +107,36 @@ def v2_get_config():
         }
     )
 
+
+# V3 endpoints
+@app.get("/v3/status")
+def v3_status():
+    return JSONResponse(worker_v3.status())
+
+
+@app.post("/v3/start")
+def v3_start():
+    worker_v3.start()
+    return JSONResponse({"ok": True, **worker_v3.status()})
+
+
+@app.post("/v3/pause")
+def v3_pause():
+    worker_v3.pause()
+    return JSONResponse({"ok": True, **worker_v3.status()})
+
+
+@app.post("/v3/resume")
+def v3_resume():
+    worker_v3.resume()
+    return JSONResponse({"ok": True, **worker_v3.status()})
+
+
+@app.post("/v3/stop")
+def v3_stop():
+    worker_v3.stop()
+    return JSONResponse({"ok": True, **worker_v3.status()})
+
 @app.get("/")
 def root():
     base = Path(__file__).parent
@@ -137,9 +169,10 @@ def admin_update():
         git_out = proc.stdout + "\n" + proc.stderr
 
         # 2) reiniciar robôs em processo (sem reiniciar o servidor)
-        global worker, worker_v2
+        global worker, worker_v2, worker_v3
         was_running_v1 = worker.status().get("running", False)
         was_running_v2 = worker_v2.status().get("running", False)
+        was_running_v3 = worker_v3.status().get("running", False)
 
         try:
             worker.stop()
@@ -149,15 +182,22 @@ def admin_update():
             worker_v2.stop()
         except Exception:
             pass
+        try:
+            worker_v3.stop()
+        except Exception:
+            pass
 
         # Cria novas instâncias para limpar estado
         worker = RoboHibrido()
         worker_v2 = RoboHibridoV2()
+        worker_v3 = RoboSequencias()
 
         if was_running_v1:
             worker.start()
         if was_running_v2:
             worker_v2.start()
+        if was_running_v3:
+            worker_v3.start()
 
         return JSONResponse({
             "ok": True,
@@ -165,6 +205,7 @@ def admin_update():
             "git_output": git_out,
             "v1_running": was_running_v1,
             "v2_running": was_running_v2,
+            "v3_running": was_running_v3,
         })
     except Exception as e:
         return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)

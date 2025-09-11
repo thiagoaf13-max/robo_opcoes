@@ -66,6 +66,32 @@
       <button class="stop" id="btnStopV2">Parar V2</button>
     </div>
 
+    <h2>Robô 3 (Sequências)</h2>
+    <div class="row">
+      <button class="start" id="btnStartV3">Iniciar V3</button>
+      <button class="pause" id="btnPauseV3">Pausar V3</button>
+      <button class="resume" id="btnResumeV3">Retomar V3</button>
+      <button class="stop" id="btnStopV3">Parar V3</button>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div><strong>Status V3</strong></div>
+        <div id="statusV3" class="status">Carregando...</div>
+      </div>
+      <div class="card">
+        <div><strong>Última Previsão (V3)</strong></div>
+        <div id="lastPredV3" class="status">Sem dados ainda</div>
+      </div>
+      <div class="card">
+        <div><strong>Histórico de Previsões V3 (5 últimas)</strong></div>
+        <div id="histV3" class="status">Sem histórico</div>
+      </div>
+      <div class="card">
+        <div><strong>Placar V3</strong></div>
+        <div id="scoreV3" class="status">Sem dados</div>
+      </div>
+    </div>
     <div class="grid">
       <div class="card">
         <div><strong>Status V2</strong></div>
@@ -99,6 +125,9 @@
       const telemetryV2El = document.getElementById('telemetryV2');
       const scoreEl = document.getElementById('score');
       const scoreV2El = document.getElementById('scoreV2');
+      const statusV3El = document.getElementById('statusV3');
+      const lastPredV3El = document.getElementById('lastPredV3');
+      const scoreV3El = document.getElementById('scoreV3');
 
       async function call(path, method = 'GET') {
         const res = await fetch(path, { method });
@@ -322,6 +351,10 @@
       document.getElementById('btnPauseV2').onclick = async () => { await call('/v2/pause', 'POST'); refreshV2(); };
       document.getElementById('btnResumeV2').onclick = async () => { await call('/v2/resume', 'POST'); refreshV2(); };
       document.getElementById('btnStopV2').onclick = async () => { await call('/v2/stop', 'POST'); refreshV2(); };
+      document.getElementById('btnStartV3').onclick = async () => { await call('/v3/start', 'POST'); refreshV3(); };
+      document.getElementById('btnPauseV3').onclick = async () => { await call('/v3/pause', 'POST'); refreshV3(); };
+      document.getElementById('btnResumeV3').onclick = async () => { await call('/v3/resume', 'POST'); refreshV3(); };
+      document.getElementById('btnStopV3').onclick = async () => { await call('/v3/stop', 'POST'); refreshV3(); };
 
       
 
@@ -329,6 +362,45 @@
       setInterval(refresh, 3000);
       refreshV2();
       setInterval(refreshV2, 3000);
+      async function refreshV3() {
+        try {
+          const s = await call('/v3/status');
+          const up = s.ultima_previsao || {};
+          const estado = s.running ? (s.paused ? '⏸️ Pausado' : '▶️ Rodando') : '⏹️ Parado';
+          const alvo = s.ultimo_horario_alvo ? s.ultimo_horario_alvo : '-';
+          let label = '-';
+          if (up.label) {
+            const low = String(up.label).toLowerCase();
+            if (low.includes('acerto')) label = '✅ ACERTO'; else if (low.includes('erro')) label = '❌ ERRO'; else label = 'ℹ️ ' + up.label;
+          }
+          const linhas = [
+            `${estado}`,
+            `🕒 Próximo: ${alvo}`,
+            `📊 Sinal: ${label}`,
+          ];
+          statusV3El.textContent = linhas.join('\n');
+          // lastPred V3
+          const cont = s.contadores || {};
+          const lp = [
+            `Label: ${up.label ?? '-'}`,
+            `Conf. final: ${up.confianca_final ?? '-'} | padrão: ${up.confianca_padrao ?? '-'}`,
+            `Slot: ${up.slot ?? '-'}`,
+            `Texto: ${up.texto ?? '-'}`,
+            `Registradas: ${cont.registradas ?? 0} | Ignoradas: ${cont.ignoradas ?? 0}`,
+            `Taxa móvel: ${s.taxa_movel ?? '-'}`,
+          ];
+          lastPredV3El.textContent = lp.join('\n');
+          // hist V3
+          const hist = s.historico_previsoes || [];
+          document.getElementById('histV3').textContent = hist.length ? hist.map(h => `${h.timestamp} | ${h.slot} | ${h.label} | conf: ${h.confianca_final}`).join('\n') : 'Sem histórico';
+          const p = s.placar || {};
+          scoreV3El.textContent = `Acertos: ${p.acertos ?? 0}\nErros: ${p.erros ?? 0}\nPendentes: ${p.pendentes ?? 0}`;
+        } catch (e) {
+          statusV3El.textContent = 'Erro ao obter status V3: ' + e;
+        }
+      }
+      refreshV3();
+      setInterval(refreshV3, 3000);
     </script>
   </body>
 </html>
