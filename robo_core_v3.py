@@ -225,6 +225,11 @@ class RoboSequencias:
                     self._ultima_prev_confianca_final = round(confianca_final, 4)
                     self._ultima_prev_label = rotulo
                     self._ultima_prev_slot = slot_str
+                    # Telemetria mínima
+                    try:
+                        last_dt_str = pd.to_datetime(df["datetime_horario"].iloc[-1]).strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        last_dt_str = None
 
                     self._historico_previsoes.append({
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

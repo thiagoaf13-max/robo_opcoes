@@ -178,6 +178,8 @@
             `p_pos: ${t.p_pos ?? '-'}`,
             `window_rows: ${t.window_rows ?? '-'}`,
             `próximo slot: ${t.proximo_slot ?? '-'}`,
+            `last_row_index: ${t.last_row_index ?? '-'}`,
+            `last_dt: ${t.last_dt ?? '-'}`,
           ];
           telemetryEl.textContent = linhas.join('\n');
         } catch (e) {
@@ -238,6 +240,8 @@
             `window_rows: ${t.window_rows ?? '-'}`,
             `próximo slot: ${t.proximo_slot ?? '-'}`,
             `limiar: ${t.limiar ?? '-'}`,
+            `last_row_index: ${t.last_row_index ?? '-'}`,
+            `last_dt: ${t.last_dt ?? '-'}`,
           ];
           telemetryV2El.textContent = linhas.join('\n');
         } catch (e) {

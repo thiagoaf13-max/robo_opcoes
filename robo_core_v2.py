@@ -397,6 +397,10 @@ class RoboHibridoV2:
                     y_pos = int(tmp.sum()) if y_total > 0 else 0
                     y_neg = int(y_total - y_pos)
                     p_pos = round(y_pos / y_total, 4) if y_total > 0 else None
+                    try:
+                        last_dt_str = pd.to_datetime(df["datetime_horario"].iloc[-1]).strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        last_dt_str = None
                     with self._lock:
                         self._telemetria = {
                             "y_total": y_total,
@@ -406,6 +410,8 @@ class RoboHibridoV2:
                             "window_rows": int(len(X_all)),
                             "proximo_slot": slot_str,
                             "limiar": round(self._threshold_decisao, 4),
+                            "last_row_index": int(len(df)),
+                            "last_dt": last_dt_str,
                         }
                 except Exception:
                     pass
