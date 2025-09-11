@@ -323,6 +323,8 @@ class RoboHibrido:
         self._acertos_count: int = 0
         self._erros_count: int = 0
         self._previsoes_pendentes: list[Dict[str, Any]] = []
+        # Controle para emitir nova previsão somente com dados novos
+        self._ultimo_hash_previsto: Optional[int] = None
 
     # ---------- Status ----------
     def status(self) -> Dict[str, Any]:
@@ -441,6 +443,19 @@ class RoboHibrido:
                     self._sleep_ate_proximo_slot()
                     continue
 
+                # V1: só gera nova previsão quando houver dados novos na planilha
+                try:
+                    hash_part_a = tuple(df["datetime_horario"].tail(50).astype(str).tolist())
+                    hash_part_b = tuple(df["resultado"].tail(50).fillna(-1).astype(int).tolist())
+                    dados_hash_atual = hash((hash_part_a, hash_part_b, len(df)))
+                except Exception:
+                    dados_hash_atual = hash(len(df))
+                if self._ultimo_hash_previsto is not None and self._ultimo_hash_previsto == dados_hash_atual:
+                    self._ultima_msg = "Standby: aguardando novos dados na aba Dados."
+                    escrever_log("⏸️ (V1) Standby: sem novos dados; aguardando.")
+                    time.sleep(10)
+                    continue
+
                 feature_cols = ["hora", "minuto", "dia_semana"] + [f"lag_{i}" for i in range(1, NUM_LAGS + 1)]
                 y = df["resultado"]
                 # V1 simples: não treina modelo; usa apenas pilares (slot, dia+slot e padrão)
@@ -491,6 +506,7 @@ class RoboHibrido:
 
                 with self._lock:
                     self._ultimo_horario_alvo = horario_alvo
+                    self._ultimo_hash_previsto = dados_hash_atual
                     # Atualiza última previsão (independente de registrar ou não)
                     self._ultima_prev_texto = texto_prev
                     self._ultima_prev_confianca_modelo = None
