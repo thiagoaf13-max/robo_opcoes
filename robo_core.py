@@ -456,6 +456,23 @@ class RoboHibrido:
                 if not self._force_once and self._ultimo_marker_dt is not None and self._ultimo_marker_len is not None:
                     if (self._ultimo_marker_dt == last_dt) and (self._ultimo_marker_len == marker_len):
                         self._ultima_msg = "Standby: aguardando novos dados na aba Dados."
+                        # Atualiza telemetria mínima mesmo em standby
+                        try:
+                            prox_tmp = proximo_slot_5min()
+                            slot_tmp = prox_tmp.strftime("%H:%M")
+                        except Exception:
+                            slot_tmp = None
+                        with self._lock:
+                            self._telemetria = {
+                                "y_total": None,
+                                "y_pos": None,
+                                "y_neg": None,
+                                "p_pos": None,
+                                "window_rows": int(marker_len),
+                                "proximo_slot": slot_tmp,
+                                "last_row_index": int(marker_len),
+                                "last_dt": last_dt.strftime("%Y-%m-%d %H:%M:%S") if isinstance(last_dt, pd.Timestamp) and pd.notna(last_dt) else None,
+                            }
                         escrever_log("⏸️ (V1) Standby: sem novos dados; aguardando.")
                         time.sleep(10)
                         continue
