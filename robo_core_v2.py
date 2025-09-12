@@ -51,6 +51,7 @@ class RoboHibridoV2:
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
+        self._poke_event = threading.Event()
         self._lock = threading.Lock()
         self._is_running: bool = False
         self._is_paused: bool = False
@@ -145,6 +146,10 @@ class RoboHibridoV2:
             escrever_log("▶️ (V2) Execução retomada.")
 
     def stop(self) -> None:
+    def poke(self) -> None:
+        # Força encerrar o sono e reler dados
+        self._poke_event.set()
+
         with self._lock:
             if not self._is_running:
                 return
@@ -469,6 +474,10 @@ class RoboHibridoV2:
             if self._pause_event.is_set():
                 time.sleep(0.5)
                 continue
+            if self._poke_event.is_set():
+                # limpa e sai para reler imediatamente
+                self._poke_event.clear()
+                break
             time.sleep(1)
             restante -= 1
 

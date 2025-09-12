@@ -147,6 +147,24 @@ def v3_stop():
     worker_v3.stop()
     return JSONResponse({"ok": True, **worker_v3.status()})
 
+
+@app.post("/v2/poke")
+def v2_poke():
+    try:
+        worker_v2.poke()
+        return JSONResponse({"ok": True, "mensagem": "V2 irá reler imediatamente."})
+    except Exception as e:
+        return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)
+
+
+@app.post("/v3/poke")
+def v3_poke():
+    try:
+        worker_v3.poke()
+        return JSONResponse({"ok": True, "mensagem": "V3 irá reler imediatamente."})
+    except Exception as e:
+        return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)
+
 @app.get("/")
 def root():
     base = Path(__file__).parent

@@ -52,6 +52,7 @@ class RoboSequencias:
         self._acertos_count: int = 0
         self._erros_count: int = 0
         self._ultimo_lag_key: Optional[str] = None
+        self._poke_event = threading.Event()
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -110,6 +111,8 @@ class RoboSequencias:
             escrever_log("▶️ (V3) Execução retomada.")
 
     def stop(self) -> None:
+    def poke(self) -> None:
+        self._poke_event.set()
         with self._lock:
             if not self._is_running:
                 return
@@ -301,6 +304,9 @@ class RoboSequencias:
                     pass
 
                 time.sleep(max(2, FREQ_MIN * 60))
+                if self._poke_event.is_set():
+                    self._poke_event.clear()
+                    continue
 
             except Exception as e:
                 escrever_log(f"❌ (V3) Erro no loop principal: {e}")
