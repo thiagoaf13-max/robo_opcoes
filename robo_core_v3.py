@@ -51,6 +51,8 @@ class RoboSequencias:
         self._previsoes_pendentes: list[Dict[str, Any]] = []
         self._acertos_count: int = 0
         self._erros_count: int = 0
+        self._ultimo_lag_key: Optional[str] = None
+        self._poke_event = threading.Event()
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -121,6 +123,9 @@ class RoboSequencias:
             self._ultima_msg = "Execução finalizada."
             escrever_log("🛑 (V3) Execução finalizada.")
 
+    def poke(self) -> None:
+        self._poke_event.set()
+
     def _loop(self) -> None:
         escrever_log("🤖 (V3) Robô de Sequências iniciado...")
         try:
@@ -148,6 +153,53 @@ class RoboSequencias:
                     escrever_log("❌ (V3) Nenhum dado válido após preparação. Aguardando próximo ciclo.")
                     time.sleep(max(5, FREQ_MIN * 60))
                     continue
+
+                # ===== Registrar lags na aba "Aprendizado" =====
+                try:
+                    planilha = aba_prev.spreadsheet  # Spreadsheet
+                    try:
+                        aba_apr = planilha.worksheet("Aprendizado")
+                    except Exception:
+                        aba_apr = planilha.add_worksheet(title="Aprendizado", rows=1000, cols=max(8, 4 + NUM_LAGS))
+                    # Cabeçalho (se vazio)
+                    try:
+                        header = aba_apr.row_values(1)
+                    except Exception:
+                        header = []
+                    expected_header = ["criado_em", "datetime_horario", "resultado"] + [f"lag_{i}" for i in range(1, NUM_LAGS + 1)]
+                    if not header:
+                        aba_apr.append_row(expected_header)
+
+                    # Última linha preparada
+                    last = df.iloc[-1]
+                    lag_vals = []
+                    for i in range(1, NUM_LAGS + 1):
+                        val = last.get(f"lag_{i}")
+                        if pd.isna(val):
+                            lag_vals.append("")
+                        else:
+                            try:
+                                lag_vals.append(int(val))
+                            except Exception:
+                                lag_vals.append(str(val))
+                    dt_key = None
+                    try:
+                        dt = last.get("datetime_horario")
+                        dt_key = pd.to_datetime(dt).strftime("%Y-%m-%d %H:%M") if pd.notna(dt) else None
+                    except Exception:
+                        dt_key = None
+
+                    # Evita duplicar, só escreve se chave mudou
+                    if dt_key and self._ultimo_lag_key != dt_key:
+                        linha = [
+                            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            dt_key + ":00" if len(dt_key) == 16 else (str(dt) if dt is not None else ""),
+                            int(last.get("resultado")) if pd.notna(last.get("resultado")) else "",
+                        ] + lag_vals
+                        aba_apr.append_row(linha)
+                        self._ultimo_lag_key = dt_key
+                except Exception as e:
+                    escrever_log(f"⚠️ (V3) Falha ao escrever lags em 'Aprendizado': {e}")
 
                 prob_padrao = calcular_probabilidade_padrao_sequencia(df, ordem=min(5, NUM_LAGS))
                 # Próximo slot apenas para relógio/slot no texto
@@ -177,6 +229,11 @@ class RoboSequencias:
                     self._ultima_prev_confianca_final = round(confianca_final, 4)
                     self._ultima_prev_label = rotulo
                     self._ultima_prev_slot = slot_str
+                    # Telemetria mínima
+                    try:
+                        last_dt_str = pd.to_datetime(df["datetime_horario"].iloc[-1]).strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        last_dt_str = None
 
                     self._historico_previsoes.append({
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -248,6 +305,9 @@ class RoboSequencias:
                     pass
 
                 time.sleep(max(2, FREQ_MIN * 60))
+                if self._poke_event.is_set():
+                    self._poke_event.clear()
+                    continue
 
             except Exception as e:
                 escrever_log(f"❌ (V3) Erro no loop principal: {e}")
